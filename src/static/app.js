@@ -3,6 +3,104 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const loginForm = document.getElementById("login-form");
+  const userInfo = document.getElementById("user-info");
+  const currentUserSpan = document.getElementById("current-user");
+  const logoutBtn = document.getElementById("logout-btn");
+  const authMessageDiv = document.getElementById("auth-message");
+  const signupContainer = document.getElementById("signup-container");
+
+  // Function to check current user
+  async function checkCurrentUser() {
+    try {
+      const response = await fetch("/current_user");
+      if (response.ok) {
+        const data = await response.json();
+        showLoggedIn(data.user);
+      } else {
+        showLoggedOut();
+      }
+    } catch (error) {
+      console.error("Error checking current user:", error);
+      showLoggedOut();
+    }
+  }
+
+  // Function to show logged in state
+  function showLoggedIn(username) {
+    currentUserSpan.textContent = `Logged in as: ${username}`;
+    userInfo.classList.remove("hidden");
+    loginForm.classList.add("hidden");
+    signupContainer.classList.remove("hidden");
+  }
+
+  // Function to show logged out state
+  function showLoggedOut() {
+    userInfo.classList.add("hidden");
+    loginForm.classList.remove("hidden");
+    signupContainer.classList.add("hidden");
+  }
+
+  // Handle login
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      const response = await fetch("/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        authMessageDiv.textContent = "Login successful!";
+        authMessageDiv.className = "success";
+        loginForm.reset();
+        checkCurrentUser();
+        fetchActivities();
+      } else {
+        authMessageDiv.textContent = result.detail || "Login failed";
+        authMessageDiv.className = "error";
+      }
+
+      authMessageDiv.classList.remove("hidden");
+
+      // Hide message after 5 seconds
+      setTimeout(() => {
+        authMessageDiv.classList.add("hidden");
+      }, 5000);
+    } catch (error) {
+      authMessageDiv.textContent = "Login failed. Please try again.";
+      authMessageDiv.className = "error";
+      authMessageDiv.classList.remove("hidden");
+      console.error("Error logging in:", error);
+    }
+  });
+
+  // Handle logout
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/logout", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        checkCurrentUser();
+        fetchActivities();
+      } else {
+        console.error("Logout failed");
+      }
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  });
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -21,7 +119,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const spotsLeft =
           details.max_participants - details.participants.length;
 
-        // Create participants HTML with delete icons instead of bullet points
+        // Create participants HTML with delete icons instead of bullet points (only if logged in)
+        const isLoggedIn = !userInfo.classList.contains("hidden");
         const participantsHTML =
           details.participants.length > 0
             ? `<div class="participants-section">
@@ -30,7 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${isLoggedIn ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button>` : ''}</li>`
                   )
                   .join("")}
               </ul>
@@ -56,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
         activitySelect.appendChild(option);
       });
 
-      // Add event listeners to delete buttons
+      // Add event listeners to delete buttons (only if they exist)
       document.querySelectorAll(".delete-btn").forEach((button) => {
         button.addEventListener("click", handleUnregister);
       });
@@ -75,11 +174,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const response = await fetch(
-        `/activities/${encodeURIComponent(
-          activity
-        )}/unregister?email=${encodeURIComponent(email)}`,
+        `/activities/${encodeURIComponent(activity)}/unregister`,
         {
           method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email }),
         }
       );
 
@@ -119,11 +220,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const response = await fetch(
-        `/activities/${encodeURIComponent(
-          activity
-        )}/signup?email=${encodeURIComponent(email)}`,
+        `/activities/${encodeURIComponent(activity)}/signup`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email }),
         }
       );
 
@@ -156,5 +259,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize app
+  checkCurrentUser();
   fetchActivities();
 });
